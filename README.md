@@ -80,5 +80,5 @@ let g:lightline = {
 
 ## Requirements
 
-- Vim 8+
+- Vim 8+ or Neovim
 - `tilt` CLI in `$PATH`
