@@ -1,4 +1,4 @@
-" tilt-wait.vim - Async tilt wait plugin for Vim
+" tilt-wait.vim - Async tilt wait plugin for Vim/Neovim
 " Waits for tilt resources to become ready and notifies on completion
 
 if exists('g:loaded_tilt_wait')
@@ -62,11 +62,24 @@ function! TiltWaitStatuslineError() abort
   return s:status_type == 'error' ? s:status : ''
 endfunction
 
-function! s:CheckDone(timer) abort
-  let l:cmd = 'tilt get session Tiltfile -o jsonpath="{.status.targets[*].state.waiting}" 2>/dev/null'
-  let l:result = trim(system(l:cmd))
+let s:check_job = v:null
+let s:check_output = ''
 
-  if v:shell_error != 0
+function! s:OnCheckOutput(channel, msg) abort
+  " Vim sends string per line
+  let s:check_output .= a:msg
+endfunction
+
+function! s:OnCheckOutputNvim(job_id, data, event) abort
+  " Neovim sends list of lines
+  let s:check_output .= join(a:data, "\n")
+endfunction
+
+function! s:OnCheckExit(channel, code) abort
+  let s:check_job = v:null
+  let l:result = trim(s:check_output)
+
+  if a:code != 0
     call s:Finish(1, 'tilt not running')
     return
   endif
@@ -74,7 +87,31 @@ function! s:CheckDone(timer) abort
   if empty(l:result)
     call s:Finish(0, '')
   endif
-  " Otherwise keep polling
+endfunction
+
+function! s:OnCheckExitNvim(job_id, code, event) abort
+  call s:OnCheckExit(a:job_id, a:code)
+endfunction
+
+function! s:CheckDone(timer) abort
+  if s:check_job != v:null
+    return " Previous check still running
+  endif
+
+  let s:check_output = ''
+  let l:cmd = ['tilt', 'get', 'session', 'Tiltfile', '-o', 'jsonpath={.status.targets[*].state.waiting}']
+
+  if has('nvim')
+    let s:check_job = jobstart(l:cmd, {
+          \ 'on_stdout': function('s:OnCheckOutputNvim'),
+          \ 'on_exit': function('s:OnCheckExitNvim'),
+          \ })
+  else
+    let s:check_job = job_start(l:cmd, {
+          \ 'out_cb': function('s:OnCheckOutput'),
+          \ 'exit_cb': function('s:OnCheckExit'),
+          \ })
+  endif
 endfunction
 
 function! s:StartPolling(timer) abort
@@ -102,6 +139,7 @@ function! s:Finish(code, msg) abort
     call timer_stop(s:poll_timer)
     let s:poll_timer = v:null
   endif
+  let s:check_job = v:null
 
   let l:elapsed = (localtime() - s:start_time)
 
@@ -152,6 +190,14 @@ function! TiltWaitStop() abort
   endif
   call timer_stop(s:poll_timer)
   let s:poll_timer = v:null
+  if s:check_job != v:null
+    if has('nvim')
+      call jobstop(s:check_job)
+    else
+      call job_stop(s:check_job)
+    endif
+    let s:check_job = v:null
+  endif
   let s:status = ''
   let s:status_type = ''
   call s:UpdateStatusline()
