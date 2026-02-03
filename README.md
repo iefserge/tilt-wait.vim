@@ -1,6 +1,6 @@
 # tilt-wait.vim
 
-Print a message in Vim status line when [Tilt](https://tilt.dev) is done updating.
+Print a message in Vim/Neovim when [Tilt](https://tilt.dev) is done updating.
 
 Tiny helpful plugin to avoid context switches between Vim and Tilt CLI/UI.
 
