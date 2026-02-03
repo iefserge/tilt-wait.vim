@@ -7,7 +7,7 @@ Tiny helpful plugin to avoid context switches between Vim and Tilt CLI/UI.
 ## Install
 
 ```bash
-Plug `iefserge/tilt-wait.vim`
+Plug 'iefserge/tilt-wait.vim'
 ```
 
 ## Usage
