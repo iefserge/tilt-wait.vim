@@ -32,7 +32,7 @@ let g:tilt_wait_on_save = 1           " Auto-run on save (default: 1)
 let g:tilt_wait_initial_delay = 2000  " Initial wait delay ms (default: 2000ms)
 let g:tilt_wait_poll_interval = 500   " Interval between polls (default: 500ms)
 let g:tilt_wait_lightline = 0         " Enable lightline integration (default: 0)
-let g:tilt_wait_status_clear = 30000  " Remove lightline status after delay (default: 30000)
+let g:tilt_wait_status_clear = 30000  " Remove status after delay (default: 30000)
 ```
 
 ## Hooks
