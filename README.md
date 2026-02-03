@@ -35,6 +35,8 @@ let g:tilt_wait_poll_interval = 500   " Interval between polls (default: 500ms)
 
 ## Hooks
 
+Optional, if you'd like to run additional actions on each event:
+
 ```vim
 autocmd User TiltWaitReady echo "Ready!"
 autocmd User TiltWaitFailed echo "Failed!"
