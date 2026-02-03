@@ -39,8 +39,28 @@ augroup END
 
 let s:start_time = 0
 let s:poll_timer = v:null
+let s:status = ''
+let s:status_type = ''
 let g:tilt_wait_initial_delay = get(g:, 'tilt_wait_initial_delay', 2000)
 let g:tilt_wait_poll_interval = get(g:, 'tilt_wait_poll_interval', 500)
+let g:tilt_wait_status_clear = get(g:, 'tilt_wait_status_clear', 30000)
+let g:tilt_wait_lightline = get(g:, 'tilt_wait_lightline', 0)
+
+function! TiltWaitStatusline() abort
+  return s:status
+endfunction
+
+function! TiltWaitStatuslineWarning() abort
+  return s:status_type == 'warning' ? s:status : ''
+endfunction
+
+function! TiltWaitStatuslineOk() abort
+  return s:status_type == 'ok' ? s:status : ''
+endfunction
+
+function! TiltWaitStatuslineError() abort
+  return s:status_type == 'error' ? s:status : ''
+endfunction
 
 function! s:CheckDone(timer) abort
   let l:cmd = 'tilt get session Tiltfile -o jsonpath="{.status.targets[*].state.waiting}" 2>/dev/null'
@@ -65,6 +85,18 @@ function! s:StartPolling(timer) abort
   endif
 endfunction
 
+function! s:UpdateStatusline() abort
+  if g:tilt_wait_lightline && exists('*lightline#update')
+    call lightline#update()
+  endif
+endfunction
+
+function! s:ClearStatus(timer) abort
+  let s:status = ''
+  let s:status_type = ''
+  call s:UpdateStatusline()
+endfunction
+
 function! s:Finish(code, msg) abort
   if s:poll_timer != v:null
     call timer_stop(s:poll_timer)
@@ -75,15 +107,25 @@ function! s:Finish(code, msg) abort
 
   redraw
   if a:code == 0
+    let s:status = 'tilt ready'
+    let s:status_type = 'ok'
     echohl DiffAdd
     echo '[TiltWait] Resources ready! (' . l:elapsed . 's)'
     echohl None
     silent! doautocmd User TiltWaitReady
   else
+    let s:status = 'tilt failed'
+    let s:status_type = 'error'
     echohl ErrorMsg
     echo '[TiltWait] Failed: ' . a:msg . ' (' . l:elapsed . 's)'
     echohl None
     silent! doautocmd User TiltWaitFailed
+  endif
+
+  call s:UpdateStatusline()
+
+  if g:tilt_wait_lightline
+    call timer_start(g:tilt_wait_status_clear, function('s:ClearStatus'))
   endif
 endfunction
 
@@ -94,6 +136,9 @@ function! TiltWaitStart() abort
     return
   endif
 
+  let s:status = 'tilt waiting'
+  let s:status_type = 'warning'
+  call s:UpdateStatusline()
   redraw
   echo '[TiltWait] Waiting for tilt...'
   let s:start_time = localtime()
@@ -107,6 +152,9 @@ function! TiltWaitStop() abort
   endif
   call timer_stop(s:poll_timer)
   let s:poll_timer = v:null
+  let s:status = ''
+  let s:status_type = ''
+  call s:UpdateStatusline()
   echo '[TiltWait] Cancelled'
 endfunction
 
