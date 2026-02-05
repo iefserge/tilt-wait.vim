@@ -39,6 +39,7 @@ augroup END
 
 let s:start_time = 0
 let s:poll_timer = v:null
+let s:clear_timer = v:null
 let s:status = ''
 let s:status_type = ''
 let g:tilt_wait_initial_delay = get(g:, 'tilt_wait_initial_delay', 2000)
@@ -85,12 +86,44 @@ function! s:OnCheckExit(channel, code) abort
   endif
 
   if empty(l:result)
-    call s:Finish(0, '')
+    call s:CheckForErrors()
   endif
 endfunction
 
 function! s:OnCheckExitNvim(job_id, code, event) abort
   call s:OnCheckExit(a:job_id, a:code)
+endfunction
+
+function! s:CheckForErrors() abort
+  let s:check_output = ''
+  let l:cmd = ['tilt', 'get', 'session', 'Tiltfile', '-o', 'jsonpath={.status.targets[*].state.terminated.error}']
+
+  if has('nvim')
+    let s:check_job = jobstart(l:cmd, {
+          \ 'on_stdout': function('s:OnCheckOutputNvim'),
+          \ 'on_exit': function('s:OnErrorCheckExitNvim'),
+          \ })
+  else
+    let s:check_job = job_start(l:cmd, {
+          \ 'out_cb': function('s:OnCheckOutput'),
+          \ 'exit_cb': function('s:OnErrorCheckExit'),
+          \ })
+  endif
+endfunction
+
+function! s:OnErrorCheckExit(channel, code) abort
+  let s:check_job = v:null
+  let l:result = trim(s:check_output)
+
+  if empty(l:result)
+    call s:Finish(0, '')
+  else
+    call s:Finish(1, 'build errors')
+  endif
+endfunction
+
+function! s:OnErrorCheckExitNvim(job_id, code, event) abort
+  call s:OnErrorCheckExit(a:job_id, a:code)
 endfunction
 
 function! s:CheckDone(timer) abort
@@ -163,7 +196,7 @@ function! s:Finish(code, msg) abort
   call s:UpdateStatusline()
 
   if g:tilt_wait_lightline
-    call timer_start(g:tilt_wait_status_clear, function('s:ClearStatus'))
+    let s:clear_timer = timer_start(g:tilt_wait_status_clear, function('s:ClearStatus'))
   endif
 endfunction
 
@@ -181,6 +214,10 @@ function! TiltWaitStart() abort
   echo '[TiltWait] Waiting for tilt...'
   let s:start_time = localtime()
   let s:poll_timer = timer_start(g:tilt_wait_initial_delay, function('s:StartPolling'))
+  if s:clear_timer != v:null
+    call timer_stop(s:clear_timer)
+    let s:clear_timer = v:null
+  endif
 endfunction
 
 function! TiltWaitStop() abort
@@ -190,6 +227,10 @@ function! TiltWaitStop() abort
   endif
   call timer_stop(s:poll_timer)
   let s:poll_timer = v:null
+  if s:clear_timer != v:null
+    call timer_stop(s:clear_timer)
+    let s:clear_timer = v:null
+  endif
   if s:check_job != v:null
     if has('nvim')
       call jobstop(s:check_job)
